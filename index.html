@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Defender X</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="game-ui">
+        <div class="top-bar">
+            <div class="score">SCORE: <span id="scoreValue">0</span></div>
+            <div class="health-container">
+                <div class="health-icon">❤️</div>
+                <div class="health-bar">
+                    <div class="health-fill" id="healthFill"></div>
+                </div>
+            </div>
+        </div>
+        <div class="power-ups">
+            <div class="power-up" id="shield" title="Shield (1)">🛡️</div>
+            <div class="power-up" id="rapid" title="Rapid Fire (2)">⚡</div>
+            <div class="power-up" id="bomb" title="Clear Screen (3)">💥</div>
+        </div>
+        <div class="controls-hint">
+            <span class="key">WASD</span> / <span class="key">↑↓←→</span> Move<br>
+            <span class="key">SPACE</span> Shoot<br>
+            <span class="key">1</span> <span class="key">2</span> <span class="key">3</span> Power-ups<br>
+            <span class="key">P</span> Pause
+        </div>
+    </div>
+
+    <div class="game-over" id="gameOver">
+        <h2>Game Over</h2>
+        <p>Final Score: <span id="finalScore">0</span></p>
+        <button class="btn" onclick="startNewGame()">Play Again</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+    <script src="game.js"></script>
+</body>
+</html>
