@@ -151,12 +151,7 @@ class Game {
         this.setupGame();
         this.setupControls();
 
-        // Initialize audio manager
-        this.audio = new AudioManager();
-        
-        // Set up audio controls
-        this.setupAudioControls();
-
+        // Initialize game state
         this.screenShake = 0;
         this.multiplier = 1;
         this.multiplierTimer = 0;
@@ -240,32 +235,6 @@ class Game {
         });
     }
 
-    setupAudioControls() {
-        const musicBtn = document.getElementById('toggleMusic');
-        const sfxBtn = document.getElementById('toggleSFX');
-        const musicVolume = document.getElementById('musicVolume');
-        const sfxVolume = document.getElementById('sfxVolume');
-
-        if (musicBtn) {
-            musicBtn.addEventListener('click', () => {
-                const isMuted = this.audio.toggleMute();
-                musicBtn.textContent = isMuted ? '🔇' : '🎵';
-            });
-        }
-
-        if (musicVolume) {
-            musicVolume.addEventListener('input', (e) => {
-                this.audio.setMusicVolume(e.target.value / 100);
-            });
-        }
-
-        if (sfxVolume) {
-            sfxVolume.addEventListener('input', (e) => {
-                this.audio.setSFXVolume(e.target.value / 100);
-            });
-        }
-    }
-
     activatePowerUp(key) {
         const powerUpMap = {
             '1': 'shield',
@@ -275,23 +244,6 @@ class Game {
         const type = powerUpMap[key];
         if (type) {
             this.powerUps[type].activate();
-            switch(type) {
-                case 'shield':
-                    this.audio.play('shieldActivate');
-                    break;
-                case 'rapid':
-                    this.audio.play('rapidFireActivate');
-                    break;
-                case 'bomb':
-                    this.audio.play('bombActivate');
-                    break;
-            }
-            if (type === 'bomb') {
-                this.enemies.forEach(enemy => {
-                    this.particles.createExplosion(enemy.x, enemy.y, 20, '#ff4');
-                });
-                this.enemies = [];
-            }
         }
     }
 
@@ -399,8 +351,8 @@ class Game {
             const bulletPattern = this.createBulletPattern(this.player.x + this.player.width / 2, this.player.y);
             bulletPattern.forEach(bullet => {
                 this.player.bullets.push({
-                    x: bullet.x,
-                    y: bullet.y,
+                    x: this.player.x + this.player.width / 2,
+                    y: this.player.y,
                     width: 4,
                     height: 10,
                     dx: bullet.dx * 10,
@@ -408,9 +360,7 @@ class Game {
                 });
             });
             
-            this.audio.play('shoot');
             this.player.shootTimer = this.powerUps.rapid.active ? 5 : 15;
-            this.particles.createTrail(this.player.x + this.player.width / 2, this.player.y, '#0f0');
         }
         this.player.shootTimer--;
 
@@ -466,7 +416,6 @@ class Game {
                     if (this.checkCollision(bullet, this.player)) {
                         if (!this.powerUps.shield.active) {
                             this.health -= 10;
-                            this.audio.play('playerHit');
                             if (this.health <= 0) {
                                 this.gameOver = true;
                                 document.getElementById('gameOver').style.display = 'block';
@@ -484,15 +433,12 @@ class Game {
             // Check collision with player bullets
             this.player.bullets = this.player.bullets.filter(bullet => {
                 if (this.checkCollision(bullet, enemy)) {
-                    enemy.health -= 25 * this.multiplier;
+                    enemy.health -= 25;
                     this.particles.createExplosion(bullet.x, bullet.y, 5, '#ff4');
-                    this.audio.play('enemyHit');
                     if (enemy.health <= 0) {
-                        this.score += 100 * this.multiplier;
+                        this.score += 100;
                         document.getElementById('scoreValue').textContent = this.score;
                         this.particles.createExplosion(enemy.x + enemy.width/2, enemy.y + enemy.height/2, 20, '#f44');
-                        this.audio.play('enemyExplode');
-                        this.achievements.unlock('firstKill');
                     }
                     return false;
                 }
@@ -503,13 +449,10 @@ class Game {
             if (this.checkCollision(this.player, enemy)) {
                 if (!this.powerUps.shield.active) {
                     this.health -= 1;
-                    this.audio.play('playerHit');
                     if (this.health <= 0) {
                         this.gameOver = true;
                         document.getElementById('gameOver').style.display = 'block';
                         document.getElementById('finalScore').textContent = this.score;
-                        this.audio.stopMusic('bgm');
-                        this.audio.play('enemyExplode');
                     }
                 }
                 return false;
@@ -552,13 +495,33 @@ class Game {
 
         // Draw player if game is not over
         if (!this.gameOver) {
-            // Draw player ship
+            // Draw player ship with a more visible design
             this.ctx.fillStyle = '#0f0';
             this.ctx.beginPath();
             this.ctx.moveTo(this.player.x + this.player.width / 2, this.player.y);
             this.ctx.lineTo(this.player.x, this.player.y + this.player.height);
             this.ctx.lineTo(this.player.x + this.player.width, this.player.y + this.player.height);
             this.ctx.closePath();
+            this.ctx.fill();
+
+            // Add engine glow
+            const gradient = this.ctx.createRadialGradient(
+                this.player.x + this.player.width / 2,
+                this.player.y + this.player.height,
+                0,
+                this.player.x + this.player.width / 2,
+                this.player.y + this.player.height,
+                20
+            );
+            gradient.addColorStop(0, 'rgba(0, 255, 0, 0.5)');
+            gradient.addColorStop(1, 'rgba(0, 255, 0, 0)');
+            this.ctx.fillStyle = gradient;
+            this.ctx.beginPath();
+            this.ctx.arc(
+                this.player.x + this.player.width / 2,
+                this.player.y + this.player.height,
+                20, 0, Math.PI * 2
+            );
             this.ctx.fill();
 
             // Draw player bullets
@@ -573,7 +536,6 @@ class Game {
             this.ctx.fillStyle = enemy.type === 'boss' ? '#f0f' : '#f00';
             this.ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
             
-            // Draw enemy bullets
             if (enemy.bullets) {
                 this.ctx.fillStyle = '#f00';
                 enemy.bullets.forEach(bullet => {
@@ -582,7 +544,7 @@ class Game {
             }
         });
 
-        // Draw UI elements
+        // Update UI elements
         document.getElementById('healthFill').style.width = this.health + '%';
         document.getElementById('scoreValue').textContent = this.score;
     }
@@ -631,16 +593,21 @@ class AchievementSystem {
         notification.textContent = `🏆 Achievement Unlocked: ${name}`;
         document.body.appendChild(notification);
         setTimeout(() => notification.remove(), 3000);
-        game.audio.play('achievement');
     }
 }
 
 // Start the game
-let game;
+let game = null;
+
 function startNewGame() {
+    if (game) {
+        // Clean up old game
+        game = null;
+    }
     game = new Game();
-    game.gameLoop();
 }
 
-// Start the game
-startNewGame();
+// Initialize game when the window loads
+window.addEventListener('load', () => {
+    startNewGame();
+});
