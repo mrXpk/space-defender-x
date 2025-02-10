@@ -126,50 +126,6 @@ class PowerUp {
     }
 }
 
-class AudioManager {
-    constructor() {
-        this.audio = {};
-        this.musicVolume = 1;
-        this.sfxVolume = 1;
-        this.muted = false;
-    }
-
-    play(id) {
-        if (!this.audio[id]) {
-            this.audio[id] = new Audio(`sounds/${id}.mp3`);
-        }
-        if (!this.muted) {
-            this.audio[id].volume = this.sfxVolume;
-            this.audio[id].play();
-        }
-    }
-
-    stopMusic(id) {
-        if (this.audio[id]) {
-            this.audio[id].pause();
-            this.audio[id].currentTime = 0;
-        }
-    }
-
-    setMusicVolume(volume) {
-        this.musicVolume = volume;
-        Object.values(this.audio).forEach(audio => {
-            if (audio.loop) {
-                audio.volume = this.musicVolume;
-            }
-        });
-    }
-
-    setSFXVolume(volume) {
-        this.sfxVolume = volume;
-    }
-
-    toggleMute() {
-        this.muted = !this.muted;
-        return this.muted;
-    }
-}
-
 class Game {
     constructor() {
         this.canvas = document.getElementById('gameCanvas');
@@ -184,8 +140,7 @@ class Game {
 
         // Initialize audio manager
         this.audio = new AudioManager();
-        this.audio.play('bgm');
-
+        
         // Set up audio controls
         this.setupAudioControls();
 
@@ -197,6 +152,11 @@ class Game {
         this.bossSpawnScore = 1000;
         this.weaponLevel = 1;
         this.shootCount = 0;
+
+        // Start background music
+        window.addEventListener('click', () => {
+            this.audio.play('bgm');
+        }, { once: true });
     }
 
     resizeCanvas() {
@@ -277,24 +237,29 @@ class Game {
     }
 
     setupAudioControls() {
-        // Music toggle
-        const toggleMusic = document.getElementById('toggleMusic');
-        toggleMusic.addEventListener('click', () => {
-            const isMuted = this.audio.toggleMute();
-            toggleMusic.classList.toggle('muted', isMuted);
-        });
-
-        // Music volume
+        const musicBtn = document.getElementById('toggleMusic');
+        const sfxBtn = document.getElementById('toggleSFX');
         const musicVolume = document.getElementById('musicVolume');
-        musicVolume.addEventListener('input', (e) => {
-            this.audio.setMusicVolume(e.target.value / 100);
-        });
-
-        // SFX volume
         const sfxVolume = document.getElementById('sfxVolume');
-        sfxVolume.addEventListener('input', (e) => {
-            this.audio.setSFXVolume(e.target.value / 100);
-        });
+
+        if (musicBtn) {
+            musicBtn.addEventListener('click', () => {
+                const isMuted = this.audio.toggleMute();
+                musicBtn.textContent = isMuted ? '🔇' : '🎵';
+            });
+        }
+
+        if (musicVolume) {
+            musicVolume.addEventListener('input', (e) => {
+                this.audio.setMusicVolume(e.target.value / 100);
+            });
+        }
+
+        if (sfxVolume) {
+            sfxVolume.addEventListener('input', (e) => {
+                this.audio.setSFXVolume(e.target.value / 100);
+            });
+        }
     }
 
     activatePowerUp(key) {
