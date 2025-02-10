@@ -3,103 +3,98 @@ class AudioManager {
         this.sounds = {};
         this.musicVolume = 0.3;
         this.sfxVolume = 0.5;
-        this.isMuted = false;
+        this.currentMusic = null;
 
+        // Initialize audio context
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Create audio elements
+        this.createAudio('shoot', 'sounds/laser.mp3');
+        this.createAudio('explosion', 'sounds/explosion.mp3');
+        this.createAudio('powerup', 'sounds/powerup.mp3');
+        this.createAudio('hit', 'sounds/hit.mp3');
+        this.createAudio('bgm', 'sounds/bgm.mp3', true);
+        
         // Initialize all game sounds
         this.loadSounds();
     }
 
-    loadSounds() {
-        // Background Music
-        this.loadSound('bgm', 'audio/background.mp3', true);
-
-        // Player sounds
-        this.loadSound('shoot', 'audio/laser12.wav');
-        this.loadSound('altShoot', 'audio/laser8.wav');
-        this.loadSound('playerHit', 'audio/ville_seppanen-1_g.mp3');
-        
-        // Enemy sounds
-        this.loadSound('enemyExplode', 'audio/ville_seppanen-1_g.mp3');
-        
-        // Boss sounds
-        this.loadSound('bossAppear', 'audio/appear-2-88047.mp3');
-        
-        // Power-up sounds
-        this.loadSound('powerupCollect', 'audio/levelup.mp3');
-        this.loadSound('shieldActivate', 'audio/sheildactivate.mp3');
-        this.loadSound('rapidFireActivate', 'audio/levelup.mp3');
-        this.loadSound('bombActivate', 'audio/ville_seppanen-1_g.mp3');
-
-        // UI sounds
-        this.loadSound('menuSelect', 'audio/laser8.wav');
-        this.loadSound('achievement', 'audio/levelup.mp3');
-    }
-
-    loadSound(name, path, isMusic = false) {
+    createAudio(name, src, isMusic = false) {
         const audio = new Audio();
-        audio.src = path;
-        audio.volume = isMusic ? this.musicVolume : this.sfxVolume;
-        
+        audio.src = src;
         if (isMusic) {
             audio.loop = true;
-        }
-
-        this.sounds[name] = {
-            audio: audio,
-            isMusic: isMusic
-        };
-    }
-
-    play(soundName) {
-        if (this.isMuted || !this.sounds[soundName]) return;
-
-        const sound = this.sounds[soundName];
-        
-        if (sound.isMusic) {
-            sound.audio.currentTime = 0;
-            sound.audio.play();
+            audio.volume = this.musicVolume;
         } else {
-            // For sound effects, create a new instance to allow overlapping
-            const sfx = new Audio(sound.audio.src);
-            sfx.volume = this.sfxVolume;
-            sfx.play();
+            audio.volume = this.sfxVolume;
+        }
+        this.sounds[name] = audio;
+    }
+
+    loadSounds() {
+        // Background Music
+        this.createAudio('bgm', 'audio/background.mp3', true);
+
+        // Player sounds
+        this.createAudio('shoot', 'audio/laser12.wav');
+        this.createAudio('altShoot', 'audio/laser8.wav');
+        this.createAudio('playerHit', 'audio/ville_seppanen-1_g.mp3');
+        
+        // Enemy sounds
+        this.createAudio('enemyExplode', 'audio/ville_seppanen-1_g.mp3');
+        
+        // Boss sounds
+        this.createAudio('bossAppear', 'audio/appear-2-88047.mp3');
+        
+        // Power-up sounds
+        this.createAudio('powerupCollect', 'audio/levelup.mp3');
+        this.createAudio('shieldActivate', 'audio/sheildactivate.mp3');
+        this.createAudio('rapidFireActivate', 'audio/levelup.mp3');
+        this.createAudio('bombActivate', 'audio/ville_seppanen-1_g.mp3');
+
+        // UI sounds
+        this.createAudio('menuSelect', 'audio/laser8.wav');
+        this.createAudio('achievement', 'audio/levelup.mp3');
+    }
+
+    playSound(name) {
+        if (this.sounds[name]) {
+            // For sound effects, create a new audio element each time
+            if (name !== 'bgm') {
+                const sound = this.sounds[name].cloneNode();
+                sound.volume = this.sfxVolume;
+                sound.play().catch(error => console.log('Audio play failed:', error));
+            } else {
+                // For background music, reuse the same element
+                this.sounds[name].currentTime = 0;
+                this.sounds[name].play().catch(error => console.log('BGM play failed:', error));
+            }
         }
     }
 
-    stopMusic(soundName) {
-        if (this.sounds[soundName] && this.sounds[soundName].isMusic) {
-            this.sounds[soundName].audio.pause();
-            this.sounds[soundName].audio.currentTime = 0;
+    stopSound(name) {
+        if (this.sounds[name]) {
+            this.sounds[name].pause();
+            this.sounds[name].currentTime = 0;
         }
     }
 
     setMusicVolume(volume) {
         this.musicVolume = Math.max(0, Math.min(1, volume));
-        Object.values(this.sounds).forEach(sound => {
-            if (sound.isMusic) {
-                sound.audio.volume = this.musicVolume;
-            }
-        });
+        if (this.sounds['bgm']) {
+            this.sounds['bgm'].volume = this.musicVolume;
+        }
     }
 
     setSFXVolume(volume) {
         this.sfxVolume = Math.max(0, Math.min(1, volume));
-        Object.values(this.sounds).forEach(sound => {
-            if (!sound.isMusic) {
-                sound.audio.volume = this.sfxVolume;
+        Object.keys(this.sounds).forEach(key => {
+            if (key !== 'bgm') {
+                this.sounds[key].volume = this.sfxVolume;
             }
         });
-    }
-
-    toggleMute() {
-        this.isMuted = !this.isMuted;
-        Object.values(this.sounds).forEach(sound => {
-            if (this.isMuted) {
-                sound.audio.pause();
-            } else if (sound.isMusic) {
-                sound.audio.play();
-            }
-        });
-        return this.isMuted;
     }
 }
+
+// Create a global audio manager instance
+window.audioManager = new AudioManager();

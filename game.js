@@ -249,15 +249,19 @@ class Game {
 
     createBulletPattern(x, y) {
         const patterns = {
-            1: [{ dx: 0, dy: -1 }],
-            2: [{ dx: -0.2, dy: -1 }, { dx: 0.2, dy: -1 }],
-            3: [{ dx: -0.3, dy: -1 }, { dx: 0, dy: -1 }, { dx: 0.3, dy: -1 }],
-            4: [{ dx: -0.3, dy: -1 }, { dx: -0.1, dy: -1 }, 
-                { dx: 0.1, dy: -1 }, { dx: 0.3, dy: -1 }]
+            1: [{ dx: 0, dy: -1 }],  // Single shot
+            2: [{ dx: -0.2, dy: -1 }, { dx: 0.2, dy: -1 }],  // Double shot
+            3: [{ dx: -0.3, dy: -1 }, { dx: 0, dy: -1 }, { dx: 0.3, dy: -1 }],  // Triple shot
+            4: [{ dx: -0.4, dy: -1 }, { dx: -0.2, dy: -1 }, { dx: 0.2, dy: -1 }, { dx: 0.4, dy: -1 }],  // Quad shot
+            5: [  // Pentagon formation
+                { dx: -0.5, dy: -1 }, { dx: -0.25, dy: -1 }, 
+                { dx: 0, dy: -1 },
+                { dx: 0.25, dy: -1 }, { dx: 0.5, dy: -1 }
+            ]
         };
 
-        const pattern = patterns[this.weaponLevel] || patterns[1];
-        return pattern;
+        const level = Math.min(5, Math.floor(this.score / 500) + 1);
+        return patterns[level] || patterns[1];
     }
 
     spawnEnemy() {
@@ -268,7 +272,7 @@ class Game {
     }
 
     spawnEnemy() {
-        const types = ['normal', 'fast', 'tank', 'shooter'];
+        const types = ['normal', 'fast', 'tank', 'shooter', 'asteroid'];
         const type = types[Math.floor(Math.random() * types.length)];
         
         const enemy = {
@@ -277,8 +281,8 @@ class Game {
             width: 40,
             height: 40,
             type: type,
-            health: type === 'tank' ? 200 : 100,
-            speed: type === 'fast' ? 5 : 2,
+            health: type === 'tank' ? 200 : type === 'asteroid' ? 50 : 100,
+            speed: type === 'fast' ? 5 : type === 'asteroid' ? 1 : 2,
             bullets: [],
             shootTimer: 0
         };
@@ -299,9 +303,86 @@ class Game {
                 enemy.speed = 1.5;
                 enemy.shootTimer = Math.random() * 60;
                 break;
+            case 'asteroid':
+                enemy.width = 40;
+                enemy.height = 40;
+                break;
         }
 
         this.enemies.push(enemy);
+    }
+
+    spawnBoss() {
+        const boss = {
+            x: this.canvas.width / 2 - 100,
+            y: -100,
+            width: 200,
+            height: 100,
+            type: 'boss',
+            health: 1000,
+            maxHealth: 1000,
+            speed: 2,
+            phase: 0,
+            phaseTimer: 0,
+            bullets: [],
+            shootTimer: 0,
+            patterns: [
+                // Phase 1: Spread shot
+                () => {
+                    if (this.shootTimer <= 0) {
+                        for (let i = -2; i <= 2; i++) {
+                            this.bullets.push({
+                                x: this.x + this.width/2,
+                                y: this.y + this.height,
+                                width: 8,
+                                height: 8,
+                                dx: i * 3,
+                                dy: 5
+                            });
+                        }
+                        this.shootTimer = 30;
+                    }
+                },
+                // Phase 2: Circle shot
+                () => {
+                    if (this.shootTimer <= 0) {
+                        for (let i = 0; i < 8; i++) {
+                            const angle = (i / 8) * Math.PI * 2;
+                            this.bullets.push({
+                                x: this.x + this.width/2,
+                                y: this.y + this.height/2,
+                                width: 8,
+                                height: 8,
+                                dx: Math.cos(angle) * 5,
+                                dy: Math.sin(angle) * 5
+                            });
+                        }
+                        this.shootTimer = 45;
+                    }
+                },
+                // Phase 3: Laser beams
+                () => {
+                    if (this.shootTimer <= 0) {
+                        const targetAngle = Math.atan2(
+                            game.player.y - (this.y + this.height/2),
+                            game.player.x - (this.x + this.width/2)
+                        );
+                        this.bullets.push({
+                            x: this.x + this.width/2,
+                            y: this.y + this.height/2,
+                            width: 12,
+                            height: 12,
+                            dx: Math.cos(targetAngle) * 8,
+                            dy: Math.sin(targetAngle) * 8
+                        });
+                        this.shootTimer = 15;
+                    }
+                }
+            ]
+        };
+
+        this.enemies.push(boss);
+        this.particles.createExplosion(boss.x + boss.width/2, boss.y + boss.height/2, 50, '#f0f', 5);
     }
 
     update() {
@@ -315,8 +396,18 @@ class Game {
 
         // Spawn enemies
         if (this.enemySpawnTimer <= 0) {
-            this.spawnEnemy();
-            this.enemySpawnTimer = 60;
+            if (this.score >= this.bossSpawnScore) {
+                this.spawnBoss();
+                this.bossSpawnScore += 1000;
+                this.enemySpawnTimer = 120;
+            } else {
+                this.spawnEnemy();
+                // Decrease spawn timer as score increases
+                const minSpawnTime = 30;
+                const maxSpawnTime = 120;
+                const spawnTime = maxSpawnTime - (this.score / 1000) * 30;
+                this.enemySpawnTimer = Math.max(minSpawnTime, spawnTime);
+            }
         }
         this.enemySpawnTimer--;
 
@@ -458,6 +549,41 @@ class Game {
                 return false;
             }
 
+            // Boss logic
+            if (enemy.type === 'boss') {
+                // Move boss
+                if (enemy.phase === 0) {
+                    if (enemy.y < this.canvas.height / 2) {
+                        enemy.y += enemy.speed;
+                    } else {
+                        enemy.phase = 1;
+                        enemy.phaseTimer = 0;
+                    }
+                } else if (enemy.phase === 1) {
+                    // Move boss left and right
+                    if (enemy.phaseTimer < 60) {
+                        enemy.x -= enemy.speed;
+                    } else if (enemy.phaseTimer < 120) {
+                        enemy.x += enemy.speed;
+                    } else {
+                        enemy.phaseTimer = 0;
+                    }
+                    enemy.phaseTimer++;
+
+                    // Shoot bullets
+                    enemy.patterns[enemy.phase - 1]();
+                    enemy.shootTimer--;
+                }
+
+                // Check if boss is dead
+                if (enemy.health <= 0) {
+                    this.score += 500;
+                    document.getElementById('scoreValue').textContent = this.score;
+                    this.particles.createExplosion(enemy.x + enemy.width/2, enemy.y + enemy.height/2, 50, '#f0f', 5);
+                    return false;
+                }
+            }
+
             return enemy.y < this.canvas.height + enemy.height && enemy.health > 0;
         });
     }
@@ -477,6 +603,180 @@ class Game {
                 star.x = Math.random() * this.canvas.width;
             }
         });
+    }
+
+    drawEnemy(enemy) {
+        const x = enemy.x;
+        const y = enemy.y;
+        const w = enemy.width;
+        const h = enemy.height;
+
+        switch(enemy.type) {
+            case 'fast':
+                // Draw sleek, fast enemy (arrow shape)
+                this.ctx.fillStyle = '#f0f';
+                this.ctx.beginPath();
+                this.ctx.moveTo(x + w/2, y);
+                this.ctx.lineTo(x + w, y + h);
+                this.ctx.lineTo(x + w/2, y + h*0.8);
+                this.ctx.lineTo(x, y + h);
+                this.ctx.closePath();
+                this.ctx.fill();
+
+                // Add engine glow
+                const fastGlow = this.ctx.createRadialGradient(
+                    x + w/2, y + h, 0,
+                    x + w/2, y + h, 15
+                );
+                fastGlow.addColorStop(0, 'rgba(255, 0, 255, 0.5)');
+                fastGlow.addColorStop(1, 'rgba(255, 0, 255, 0)');
+                this.ctx.fillStyle = fastGlow;
+                this.ctx.beginPath();
+                this.ctx.arc(x + w/2, y + h, 15, 0, Math.PI * 2);
+                this.ctx.fill();
+                break;
+
+            case 'tank':
+                // Draw heavy tank enemy (hexagon shape)
+                this.ctx.fillStyle = '#f80';
+                this.ctx.beginPath();
+                this.ctx.moveTo(x + w*0.2, y);
+                this.ctx.lineTo(x + w*0.8, y);
+                this.ctx.lineTo(x + w, y + h*0.3);
+                this.ctx.lineTo(x + w*0.8, y + h);
+                this.ctx.lineTo(x + w*0.2, y + h);
+                this.ctx.lineTo(x, y + h*0.3);
+                this.ctx.closePath();
+                this.ctx.fill();
+
+                // Add armor details
+                this.ctx.strokeStyle = '#fa0';
+                this.ctx.lineWidth = 2;
+                this.ctx.beginPath();
+                this.ctx.moveTo(x + w*0.2, y + h*0.3);
+                this.ctx.lineTo(x + w*0.8, y + h*0.3);
+                this.ctx.moveTo(x + w*0.2, y + h*0.6);
+                this.ctx.lineTo(x + w*0.8, y + h*0.6);
+                this.ctx.stroke();
+                break;
+
+            case 'shooter':
+                // Draw shooter enemy (diamond with cannons)
+                this.ctx.fillStyle = '#08f';
+                this.ctx.beginPath();
+                this.ctx.moveTo(x + w/2, y);
+                this.ctx.lineTo(x + w, y + h/2);
+                this.ctx.lineTo(x + w/2, y + h);
+                this.ctx.lineTo(x, y + h/2);
+                this.ctx.closePath();
+                this.ctx.fill();
+
+                // Add cannons
+                this.ctx.fillStyle = '#0af';
+                this.ctx.fillRect(x - 5, y + h*0.3, 10, 10);
+                this.ctx.fillRect(x + w - 5, y + h*0.3, 10, 10);
+                break;
+
+            case 'asteroid':
+                // Draw asteroid (irregular polygon)
+                this.ctx.fillStyle = '#888';
+                this.ctx.beginPath();
+                this.ctx.moveTo(x + w*0.5, y);
+                this.ctx.lineTo(x + w*0.8, y + h*0.3);
+                this.ctx.lineTo(x + w, y + h*0.5);
+                this.ctx.lineTo(x + w*0.8, y + h*0.8);
+                this.ctx.lineTo(x + w*0.5, y + h);
+                this.ctx.lineTo(x + w*0.2, y + h*0.8);
+                this.ctx.lineTo(x, y + h*0.5);
+                this.ctx.lineTo(x + w*0.2, y + h*0.3);
+                this.ctx.closePath();
+                this.ctx.fill();
+
+                // Add crater details
+                this.ctx.strokeStyle = '#666';
+                this.ctx.lineWidth = 2;
+                this.ctx.beginPath();
+                this.ctx.arc(x + w*0.3, y + h*0.3, 5, 0, Math.PI * 2);
+                this.ctx.arc(x + w*0.7, y + h*0.7, 7, 0, Math.PI * 2);
+                this.ctx.stroke();
+                break;
+
+            case 'boss':
+                // Draw boss ship (large complex shape)
+                this.ctx.fillStyle = '#f0f';
+                
+                // Main body
+                this.ctx.beginPath();
+                this.ctx.moveTo(x + w*0.5, y);
+                this.ctx.lineTo(x + w*0.8, y + h*0.2);
+                this.ctx.lineTo(x + w, y + h*0.4);
+                this.ctx.lineTo(x + w, y + h*0.8);
+                this.ctx.lineTo(x + w*0.8, y + h);
+                this.ctx.lineTo(x + w*0.2, y + h);
+                this.ctx.lineTo(x, y + h*0.8);
+                this.ctx.lineTo(x, y + h*0.4);
+                this.ctx.lineTo(x + w*0.2, y + h*0.2);
+                this.ctx.closePath();
+                this.ctx.fill();
+
+                // Add details
+                this.ctx.strokeStyle = '#f0f';
+                this.ctx.lineWidth = 3;
+                this.ctx.beginPath();
+                // Core
+                this.ctx.arc(x + w*0.5, y + h*0.5, 20, 0, Math.PI * 2);
+                // Weapon mounts
+                this.ctx.moveTo(x + 10, y + h*0.6);
+                this.ctx.lineTo(x + 30, y + h*0.6);
+                this.ctx.moveTo(x + w - 30, y + h*0.6);
+                this.ctx.lineTo(x + w - 10, y + h*0.6);
+                this.ctx.stroke();
+
+                // Add boss shield if health is high
+                if (enemy.health > enemy.maxHealth * 0.5) {
+                    const shieldGlow = this.ctx.createRadialGradient(
+                        x + w*0.5, y + h*0.5, w*0.5,
+                        x + w*0.5, y + h*0.5, w*0.7
+                    );
+                    shieldGlow.addColorStop(0, 'rgba(255, 0, 255, 0.1)');
+                    shieldGlow.addColorStop(0.5, 'rgba(255, 0, 255, 0.2)');
+                    shieldGlow.addColorStop(1, 'rgba(255, 0, 255, 0)');
+                    this.ctx.fillStyle = shieldGlow;
+                    this.ctx.beginPath();
+                    this.ctx.arc(x + w*0.5, y + h*0.5, w*0.7, 0, Math.PI * 2);
+                    this.ctx.fill();
+                }
+                break;
+
+            default:
+                // Default enemy (improved triangle)
+                this.ctx.fillStyle = '#f00';
+                this.ctx.beginPath();
+                this.ctx.moveTo(x + w/2, y);
+                this.ctx.lineTo(x + w, y + h);
+                this.ctx.lineTo(x, y + h);
+                this.ctx.closePath();
+                this.ctx.fill();
+
+                // Add engine glow
+                const normalGlow = this.ctx.createRadialGradient(
+                    x + w/2, y + h, 0,
+                    x + w/2, y + h, 15
+                );
+                normalGlow.addColorStop(0, 'rgba(255, 0, 0, 0.5)');
+                normalGlow.addColorStop(1, 'rgba(255, 0, 0, 0)');
+                this.ctx.fillStyle = normalGlow;
+                this.ctx.beginPath();
+                this.ctx.arc(x + w/2, y + h, 15, 0, Math.PI * 2);
+                this.ctx.fill();
+        }
+
+        // Draw health bar for all enemies except asteroids
+        if (enemy.type !== 'asteroid') {
+            const healthPercent = enemy.health / (enemy.type === 'boss' ? enemy.maxHealth : 100);
+            this.ctx.fillStyle = `rgb(${255 * (1 - healthPercent)}, ${255 * healthPercent}, 0)`;
+            this.ctx.fillRect(x, y - 10, w * healthPercent, 5);
+        }
     }
 
     draw() {
@@ -533,15 +833,7 @@ class Game {
 
         // Draw enemies
         this.enemies.forEach(enemy => {
-            this.ctx.fillStyle = enemy.type === 'boss' ? '#f0f' : '#f00';
-            this.ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
-            
-            if (enemy.bullets) {
-                this.ctx.fillStyle = '#f00';
-                enemy.bullets.forEach(bullet => {
-                    this.ctx.fillRect(bullet.x - bullet.width/2, bullet.y, bullet.width, bullet.height);
-                });
-            }
+            this.drawEnemy(enemy);
         });
 
         // Update UI elements
