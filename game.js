@@ -180,20 +180,13 @@ class Game {
     setupGame() {
         this.score = 0;
         this.health = 100;
-        this.gameOver = false;
         this.paused = false;
-        this.enemies = [];
-        this.enemySpawnTimer = 0;
-        this.powerUps = {
-            shield: new PowerUp('shield'),
-            rapid: new PowerUp('rapid'),
-            bomb: new PowerUp('bomb')
-        };
-
-        // Player initialization
+        this.gameOver = false;
+        
+        // Initialize player
         this.player = {
-            x: this.canvas.width / 2 - 25,  // Center horizontally
-            y: this.canvas.height - 100,    // Position from bottom
+            x: this.canvas.width / 2 - 25,
+            y: this.canvas.height - 100,
             width: 50,
             height: 50,
             speed: 8,
@@ -201,18 +194,19 @@ class Game {
             shootTimer: 0
         };
 
-        // Controls state
-        this.keys = {
-            'ArrowLeft': false,
-            'ArrowRight': false,
-            'ArrowUp': false,
-            'ArrowDown': false,
-            'a': false,
-            'd': false,
-            'w': false,
-            's': false,
-            ' ': false
+        // Initialize enemies and power-ups
+        this.enemies = [];
+        this.enemySpawnTimer = 60;
+        this.powerUps = {
+            shield: new PowerUp('shield'),
+            rapid: new PowerUp('rapid'),
+            bomb: new PowerUp('bomb')
         };
+
+        // Reset UI
+        document.getElementById('scoreValue').textContent = '0';
+        document.getElementById('healthFill').style.width = '100%';
+        document.getElementById('gameOver').style.display = 'none';
     }
 
     setupControls() {
@@ -301,28 +295,12 @@ class Game {
         };
 
         const pattern = patterns[this.weaponLevel] || patterns[1];
-        pattern.forEach(p => {
-            this.player.bullets.push({
-                x: x,
-                y: y,
-                width: 4,
-                height: 15,
-                speed: 15,
-                dx: p.dx * 5,
-                dy: p.dy * 15,
-                color: `hsl(${Math.random() * 60 + 200}, 100%, 50%)`
-            });
-        });
+        return pattern;
     }
 
     spawnEnemy() {
         if (this.enemySpawnTimer <= 0) {
-            this.spawnEnemy();
-            // Decrease spawn timer as score increases
-            const minSpawnTime = 30;
-            const maxSpawnTime = 120;
-            const spawnTime = maxSpawnTime - (this.score / 1000) * 30;
-            this.enemySpawnTimer = Math.max(minSpawnTime, spawnTime);
+            this.enemySpawnTimer = 60;
         }
         this.enemySpawnTimer--;
     }
@@ -404,33 +382,40 @@ class Game {
     }
 
     updatePlayer() {
-        if (this.gameOver || this.paused) return;
+        if (this.gameOver) return;
 
         // Movement
-        const moveSpeed = this.player.speed;
-        if ((this.keys['ArrowLeft'] || this.keys['a']) && this.player.x > 0) {
-            this.player.x -= moveSpeed;
+        const speed = this.player.speed;
+        if ((this.keys.ArrowLeft || this.keys.a) && this.player.x > 0) {
+            this.player.x -= speed;
         }
-        if ((this.keys['ArrowRight'] || this.keys['d']) && this.player.x < this.canvas.width - this.player.width) {
-            this.player.x += moveSpeed;
+        if ((this.keys.ArrowRight || this.keys.d) && this.player.x < this.canvas.width - this.player.width) {
+            this.player.x += speed;
         }
-        if ((this.keys['ArrowUp'] || this.keys['w']) && this.player.y > 0) {
-            this.player.y -= moveSpeed;
+        if ((this.keys.ArrowUp || this.keys.w) && this.player.y > 0) {
+            this.player.y -= speed;
         }
-        if ((this.keys['ArrowDown'] || this.keys['s']) && this.player.y < this.canvas.height - this.player.height) {
-            this.player.y += moveSpeed;
+        if ((this.keys.ArrowDown || this.keys.s) && this.player.y < this.canvas.height - this.player.height) {
+            this.player.y += speed;
         }
 
         // Shooting
-        const shootDelay = this.powerUps.rapid.active ? 5 : 15;
-        if ((this.keys[' '] || this.keys['Space']) && this.player.shootTimer <= 0) {
-            this.createBulletPattern(
-                this.player.x + this.player.width / 2,
-                this.player.y
-            );
-            this.player.shootTimer = shootDelay;
-            this.audio.play(this.shootCount % 2 === 0 ? 'shoot' : 'altShoot');
-            this.shootCount++;
+        if (this.keys[' '] && this.player.shootTimer <= 0) {
+            const bulletPattern = this.createBulletPattern(this.player.x + this.player.width / 2, this.player.y);
+            bulletPattern.forEach(bullet => {
+                this.player.bullets.push({
+                    x: bullet.x,
+                    y: bullet.y,
+                    width: 4,
+                    height: 10,
+                    dx: bullet.dx * 10,
+                    dy: bullet.dy * 10
+                });
+            });
+            
+            this.audio.play('shoot');
+            this.player.shootTimer = this.powerUps.rapid.active ? 5 : 15;
+            this.particles.createTrail(this.player.x + this.player.width / 2, this.player.y, '#0f0');
         }
         this.player.shootTimer--;
 
@@ -438,8 +423,8 @@ class Game {
         this.player.bullets = this.player.bullets.filter(bullet => {
             bullet.x += bullet.dx;
             bullet.y += bullet.dy;
-            return bullet.y > -bullet.height && bullet.y < this.canvas.height &&
-                   bullet.x > -bullet.width && bullet.x < this.canvas.width;
+            return bullet.y > 0 && bullet.y < this.canvas.height &&
+                   bullet.x > 0 && bullet.x < this.canvas.width;
         });
 
         // Create engine trail
@@ -468,7 +453,6 @@ class Game {
                     y: enemy.y + enemy.height,
                     width: 4,
                     height: 4,
-                    speed: 5,
                     dx: Math.cos(angle) * 5,
                     dy: Math.sin(angle) * 5
                 });
@@ -558,35 +542,22 @@ class Game {
     }
 
     draw() {
-        // Apply screen shake
-        if (this.screenShake > 0) {
-            const dx = (Math.random() - 0.5) * this.screenShake;
-            const dy = (Math.random() - 0.5) * this.screenShake;
-            this.ctx.save();
-            this.ctx.translate(dx, dy);
-            this.screenShake--;
-        }
-
-        // Clear canvas
+        // Clear canvas with black background
         this.ctx.fillStyle = '#000';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-        // Draw nebula clouds
+        // Draw particles and stars
         this.particles.draw(this.ctx);
-
-        // Draw stars
         this.ctx.fillStyle = '#fff';
         this.stars.forEach(star => {
-            this.ctx.globalAlpha = star.size / 3;
             this.ctx.beginPath();
             this.ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
             this.ctx.fill();
         });
-        this.ctx.globalAlpha = 1;
 
-        // Draw player
+        // Draw player if game is not over
         if (!this.gameOver) {
-            // Draw player ship body
+            // Draw player ship
             this.ctx.fillStyle = '#0f0';
             this.ctx.beginPath();
             this.ctx.moveTo(this.player.x + this.player.width / 2, this.player.y);
@@ -595,104 +566,30 @@ class Game {
             this.ctx.closePath();
             this.ctx.fill();
 
-            // Draw player ship details
-            this.ctx.strokeStyle = '#0f8';
-            this.ctx.lineWidth = 2;
-            this.ctx.beginPath();
-            // Cockpit
-            this.ctx.moveTo(this.player.x + this.player.width * 0.3, this.player.y + this.player.height * 0.6);
-            this.ctx.lineTo(this.player.x + this.player.width * 0.7, this.player.y + this.player.height * 0.6);
-            // Wings
-            this.ctx.moveTo(this.player.x + this.player.width * 0.2, this.player.y + this.player.height * 0.7);
-            this.ctx.lineTo(this.player.x + this.player.width * 0.4, this.player.y + this.player.height * 0.4);
-            this.ctx.moveTo(this.player.x + this.player.width * 0.8, this.player.y + this.player.height * 0.7);
-            this.ctx.lineTo(this.player.x + this.player.width * 0.6, this.player.y + this.player.height * 0.4);
-            this.ctx.stroke();
-
-            // Draw engine glow
-            const gradient = this.ctx.createRadialGradient(
-                this.player.x + this.player.width / 2, this.player.y + this.player.height,
-                0,
-                this.player.x + this.player.width / 2, this.player.y + this.player.height,
-                20
-            );
-            gradient.addColorStop(0, 'rgba(0, 255, 0, 0.5)');
-            gradient.addColorStop(1, 'rgba(0, 255, 0, 0)');
-            this.ctx.fillStyle = gradient;
-            this.ctx.beginPath();
-            this.ctx.arc(
-                this.player.x + this.player.width / 2,
-                this.player.y + this.player.height,
-                20, 0, Math.PI * 2
-            );
-            this.ctx.fill();
+            // Draw player bullets
+            this.ctx.fillStyle = '#0f0';
+            this.player.bullets.forEach(bullet => {
+                this.ctx.fillRect(bullet.x - bullet.width/2, bullet.y, bullet.width, bullet.height);
+            });
         }
-
-        // Draw shield if active
-        if (this.powerUps.shield.active) {
-            const shieldGradient = this.ctx.createRadialGradient(
-                this.player.x + this.player.width / 2,
-                this.player.y + this.player.height / 2,
-                this.player.width * 0.4,
-                this.player.x + this.player.width / 2,
-                this.player.y + this.player.height / 2,
-                this.player.width * 0.8
-            );
-            shieldGradient.addColorStop(0, 'rgba(0, 255, 255, 0)');
-            shieldGradient.addColorStop(0.5, 'rgba(0, 255, 255, 0.2)');
-            shieldGradient.addColorStop(1, 'rgba(0, 255, 255, 0)');
-            
-            this.ctx.fillStyle = shieldGradient;
-            this.ctx.beginPath();
-            this.ctx.arc(
-                this.player.x + this.player.width / 2,
-                this.player.y + this.player.height / 2,
-                this.player.width * 0.8,
-                0, Math.PI * 2
-            );
-            this.ctx.fill();
-            
-            this.ctx.strokeStyle = '#0ff';
-            this.ctx.lineWidth = 2;
-            this.ctx.stroke();
-        }
-
-        // Draw bullets
-        this.ctx.fillStyle = '#ff0';
-        this.player.bullets.forEach(bullet => {
-            this.ctx.fillStyle = bullet.color || '#ff0';
-            this.ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
-        });
 
         // Draw enemies
         this.enemies.forEach(enemy => {
-            const healthPercent = enemy.health / (enemy.type === 'tank' ? 200 : 100);
-            
-            // Enemy body
-            this.ctx.fillStyle = enemy.type === 'tank' ? '#f80' :
-                                enemy.type === 'fast' ? '#f0f' :
-                                enemy.type === 'shooter' ? '#08f' : '#f00';
+            this.ctx.fillStyle = enemy.type === 'boss' ? '#f0f' : '#f00';
             this.ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
             
-            // Health bar
-            this.ctx.fillStyle = '#0f0';
-            this.ctx.fillRect(enemy.x, enemy.y - 10, enemy.width * healthPercent, 5);
+            // Draw enemy bullets
+            if (enemy.bullets) {
+                this.ctx.fillStyle = '#f00';
+                enemy.bullets.forEach(bullet => {
+                    this.ctx.fillRect(bullet.x - bullet.width/2, bullet.y, bullet.width, bullet.height);
+                });
+            }
         });
 
-        if (this.screenShake > 0) {
-            this.ctx.restore();
-        }
-
-        // Draw UI
-        this.ctx.fillStyle = '#fff';
-        this.ctx.font = '20px Arial';
-        this.ctx.fillText(`Score: ${this.score}`, 20, 40);
-        this.ctx.fillText(`High Score: ${this.highScore}`, 20, 70);
-        
-        if (this.multiplier > 1) {
-            this.ctx.fillStyle = '#0f0';
-            this.ctx.fillText(`${this.multiplier}x`, 20, 100);
-        }
+        // Draw UI elements
+        document.getElementById('healthFill').style.width = this.health + '%';
+        document.getElementById('scoreValue').textContent = this.score;
     }
 
     gameLoop() {
