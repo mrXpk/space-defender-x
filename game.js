@@ -133,6 +133,19 @@ class Game {
         this.resizeCanvas();
         window.addEventListener('resize', () => this.resizeCanvas());
 
+        // Initialize controls
+        this.keys = {
+            'ArrowLeft': false,
+            'ArrowRight': false,
+            'ArrowUp': false,
+            'ArrowDown': false,
+            'a': false,
+            'd': false,
+            'w': false,
+            's': false,
+            ' ': false
+        };
+
         this.particles = new ParticleSystem();
         this.stars = this.createStars();
         this.setupGame();
@@ -153,10 +166,8 @@ class Game {
         this.weaponLevel = 1;
         this.shootCount = 0;
 
-        // Start background music
-        window.addEventListener('click', () => {
-            this.audio.play('bgm');
-        }, { once: true });
+        // Start the game loop
+        this.gameLoop();
     }
 
     resizeCanvas() {
@@ -210,20 +221,19 @@ class Game {
     }
 
     setupControls() {
-        // Keyboard controls
-        window.addEventListener('keydown', e => {
+        window.addEventListener('keydown', (e) => {
             if (this.keys.hasOwnProperty(e.key)) {
                 this.keys[e.key] = true;
-                if (e.key === 'p' || e.key === 'P') {
-                    this.paused = !this.paused;
-                }
-                if (['1', '2', '3'].includes(e.key)) {
-                    this.activatePowerUp(e.key);
-                }
+            }
+            if (e.key === 'p' || e.key === 'P') {
+                this.paused = !this.paused;
+            }
+            if (['1', '2', '3'].includes(e.key)) {
+                this.activatePowerUp(e.key);
             }
         });
 
-        window.addEventListener('keyup', e => {
+        window.addEventListener('keyup', (e) => {
             if (this.keys.hasOwnProperty(e.key)) {
                 this.keys[e.key] = false;
             }
@@ -352,33 +362,18 @@ class Game {
         this.particles.update();
 
         // Spawn enemies
-        this.spawnEnemy();
-
-        // Check for boss spawn
-        if (this.score >= this.bossSpawnScore) {
-            this.spawnBoss();
-            this.bossSpawnScore += 1000; // Next boss at 1000 more points
+        if (this.enemySpawnTimer <= 0) {
+            this.spawnEnemy();
+            this.enemySpawnTimer = 60;
         }
+        this.enemySpawnTimer--;
 
         // Update power-ups
         Object.values(this.powerUps).forEach(powerUp => powerUp.update());
 
-        // Update weapon level based on score
-        this.weaponLevel = Math.min(4, Math.floor(this.score / 500) + 1);
-
-        // Update score multiplier
-        if (this.multiplierTimer > 0) {
-            this.multiplierTimer--;
-            if (this.multiplierTimer <= 0) {
-                this.multiplier = 1;
-            }
-        }
-
-        // Update high score
-        if (this.score > this.highScore) {
-            this.highScore = this.score;
-            localStorage.setItem('highScore', this.highScore);
-        }
+        // Update UI
+        document.getElementById('healthFill').style.width = this.health + '%';
+        document.getElementById('scoreValue').textContent = this.score;
     }
 
     updatePlayer() {
