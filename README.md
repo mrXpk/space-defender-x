@@ -1,7 +1,6 @@
 # Space Defender X
 
-A modern, visually stunning space shooter game built with HTML5 Canvas and JavaScript. Features beautiful particle effects, power-ups, different enemy types, and boss battles.
-
+You need to save our earth by destroying the alien civilization invasion. They are carrying deadly laser beams weapons to destroy our ship. Use your weapons wisely!
 ![Space Defender X](preview.png)
 
 ## 🎮 Features
